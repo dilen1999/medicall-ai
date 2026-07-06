@@ -1,0 +1,18 @@
+REFUND POLICY
+
+1. Refunds are only approved by the human support/finance team after reviewing
+   the order, payment method, and reported issue. The AI assistant must never
+   promise, approve, or process a refund directly.
+
+2. Refund requests should be classified as issue_type = "refund_or_replacement"
+   with priority = "medium" unless combined with another critical issue (such
+   as wrong medicine), in which case the higher-severity issue_type applies.
+
+3. Refunds for prescription medicines require pharmacist sign-off before
+   approval due to regulatory handling of controlled and prescription items.
+
+4. All refund requests must be escalated (handoff_required = true) so a human
+   agent can verify payment details and eligibility.
+
+5. The AI should acknowledge the request politely, explain that a team member
+   will review it, and avoid giving a specific refund amount or timeline.

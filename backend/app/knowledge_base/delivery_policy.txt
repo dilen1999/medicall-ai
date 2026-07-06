@@ -1,0 +1,18 @@
+DELIVERY CONFIRMATION POLICY
+
+1. If the order is delivered successfully and the customer confirms receipt with
+   no complaints, mark delivery_confirmed = true and issue_type = "no_issue".
+
+2. If the customer reports that delivery arrived later than expected but the
+   order was ultimately received in full, mark issue_type = "delivery_delay_feedback".
+   This is treated as low-to-medium priority feedback, not a critical issue.
+
+3. If the customer cannot be reached after 3 call attempts, the case should be
+   flagged for manual follow-up by the support team rather than closed silently.
+
+4. Delivery confirmation calls should always ask three things: (a) was the
+   package received, (b) are all items present and undamaged, and (c) does the
+   customer have any other concerns about their order.
+
+5. A customer declining to answer detailed questions but confirming receipt is
+   still considered a successful, low-priority delivery confirmation.

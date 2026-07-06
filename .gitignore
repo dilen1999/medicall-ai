@@ -1,0 +1,7 @@
+# Zip snapshots (not part of the tracked project)
+*.zip
+
+# Editor
+.vscode/
+.idea/
+.DS_Store

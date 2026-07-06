@@ -1,0 +1,20 @@
+PHARMACIST SUPPORT ESCALATION POLICY
+
+1. Any customer question involving dosage, side effects, drug interactions,
+   allergies, symptoms, or "should I take/stop this medicine" decisions must
+   be escalated to a licensed pharmacist. The AI must not answer these
+   questions itself under any circumstances.
+
+2. When such a question is detected, classify issue_type =
+   "pharmacist_support", priority = "critical", handoff_required = true, and
+   pharmacist_required = true, regardless of how minor the question may seem.
+
+3. The AI's response to the customer in these situations should be limited to
+   acknowledging the concern and confirming that a pharmacist will contact
+   them. It must avoid providing any medical guidance, reassurance about
+   safety, or dosage-related commentary, even if the customer insists.
+
+4. This rule takes precedence over all other classification rules. If a call
+   contains both a logistics issue (e.g. missing item) and a medical question,
+   the medical question drives pharmacist_required = true and
+   priority = "critical" for the overall analysis.

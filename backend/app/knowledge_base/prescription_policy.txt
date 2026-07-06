@@ -1,0 +1,16 @@
+PRESCRIPTION HANDLING POLICY
+
+1. Orders marked prescription_required = true must have their prescription
+   items verified against a valid, pharmacist-approved prescription prior to
+   dispatch. Any post-delivery dispute about a prescription item should be
+   escalated to a pharmacist.
+
+2. If a customer mentions receiving a medicine that does not match what was
+   prescribed to them, classify issue_type = "wrong_medicine" with
+   priority = "critical", handoff_required = true, and
+   pharmacist_required = true. Wrong prescription medicine is treated as a
+   patient-safety issue, not a routine logistics issue.
+
+3. The AI voice agent must never confirm, suggest, or imply that a
+   prescription substitution is acceptable. All such determinations belong to
+   a licensed pharmacist.

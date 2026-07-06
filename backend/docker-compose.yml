@@ -1,0 +1,88 @@
+# ---------------------------------------------------------------------------
+# MediCall AI - Local development stack
+# Run with: docker compose up --build
+# ---------------------------------------------------------------------------
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: medicall_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: medicall_ai
+    ports:
+      # Host-side port only (container still listens on 5432, and
+      # backend/n8n reach it internally via db:5432). Remapped because
+      # Windows/Hyper-V sometimes reserves 5432 in a dynamic excluded port
+      # range, which blocks Docker from binding it on the host.
+      - "5555:5432"
+    volumes:
+      - medicall_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: medicall_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/medicall_ai
+      # Sri Lanka Standard Time - only affects log timestamps (%(asctime)s);
+      # all persisted/returned timestamps come from app.utils.timezone.now_sl(),
+      # which is independent of the container's system timezone.
+      TZ: "Asia/Colombo"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - medicall_chroma_data:/app/chroma_store
+
+  # Optional automation workflow layer - see backend/n8n/n8n-setup-guide.md.
+  # n8n reaches FastAPI over the docker network as http://backend:8000
+  # (FASTAPI_BASE_URL); Twilio reaches FastAPI over the public internet via
+  # PUBLIC_BASE_URL (an ngrok/Cloudflare tunnel pointed at localhost:8000).
+  # From your browser/Postman, FastAPI is still http://localhost:8000.
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: medicall_n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      # Recent n8n versions block $env access inside node expressions by
+      # default (security hardening) - our workflows read $env.* everywhere
+      # (FASTAPI_BASE_URL, TWILIO_*, etc.), so this must be off.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Sri Lanka Standard Time (UTC+05:30, no DST) - so the daily 6 PM
+      # summary trigger and any date-based logic run on local time, not UTC.
+      GENERIC_TIMEZONE: "Asia/Colombo"
+      TZ: "Asia/Colombo"
+      FASTAPI_BASE_URL: http://backend:8000
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER}
+      OWNER_EMAIL: ${OWNER_EMAIL}
+    depends_on:
+      - backend
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  medicall_pg_data:
+  medicall_chroma_data:
+  n8n_data:

@@ -1,0 +1,375 @@
+{
+  "name": "MediCall AI - Trigger Medicine Delivery Calls",
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger (every 5 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-200, 200],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual-trigger",
+      "name": "Manual Trigger (test)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-200, 400],
+      "parameters": {}
+    },
+    {
+      "id": "get-pending-orders",
+      "name": "Get Pending Delivered Orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [40, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.FASTAPI_BASE_URL}}/api/orders/pending-calls",
+        "options": {}
+      }
+    },
+    {
+      "id": "normalize-orders",
+      "name": "Normalize Orders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [260, 300],
+      "notes": "n8n's HTTP Request node can return the array as one item or many depending on version/settings - this flattens either shape into one n8n item per order.",
+      "parameters": {
+        "jsCode": "const raw = $input.all();\nlet orders = [];\n\nfor (const item of raw) {\n  const data = item.json;\n  if (Array.isArray(data)) {\n    orders = orders.concat(data);\n  } else if (data && Array.isArray(data.body)) {\n    orders = orders.concat(data.body);\n  } else if (data && data.id) {\n    orders.push(data);\n  }\n}\n\nreturn orders.map((order) => ({ json: order }));"
+      }
+    },
+    {
+      "id": "has-pending-orders",
+      "name": "Has Pending Orders?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has-order-id",
+              "leftValue": "={{$json.id}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "no-pending-orders",
+      "name": "No Pending Orders",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [700, 420],
+      "parameters": {}
+    },
+    {
+      "id": "loop-over-orders",
+      "name": "Loop Over Orders",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [700, 220],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "trigger-twilio-call",
+      "name": "Trigger Twilio Outbound Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 140],
+      "continueOnFail": true,
+      "notes": "After import: create/select an HTTP Basic Auth credential using TWILIO_ACCOUNT_SID as username and TWILIO_AUTH_TOKEN as password (see n8n-setup-guide.md).",
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/{{$env.TWILIO_ACCOUNT_SID}}/Calls.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "To",
+              "value": "={{$json.customer.phone_number}}"
+            },
+            {
+              "name": "From",
+              "value": "={{$env.TWILIO_PHONE_NUMBER}}"
+            },
+            {
+              "name": "Url",
+              "value": "={{$env.PUBLIC_BASE_URL}}/api/calls/twiml/{{$json.id}}"
+            },
+            {
+              "name": "StatusCallback",
+              "value": "={{$env.PUBLIC_BASE_URL}}/api/calls/webhook"
+            },
+            {
+              "name": "StatusCallbackMethod",
+              "value": "POST"
+            },
+            {
+              "name": "StatusCallbackEvent",
+              "value": "initiated ringing answered completed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "twilio-basic-auth-placeholder",
+          "name": "Twilio Basic Auth"
+        }
+      }
+    },
+    {
+      "id": "twilio-call-succeeded",
+      "name": "Twilio Call Succeeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1160, 140],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has-sid",
+              "leftValue": "={{$json.sid}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "mark-call-triggered",
+      "name": "Mark Call Triggered",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1380, 60],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.FASTAPI_BASE_URL}}/api/orders/{{$('Loop Over Orders').item.json.id}}/mark-call-triggered",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"twilio_call_sid\": $json.sid } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "mark-call-failed",
+      "name": "Mark Call Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1380, 220],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.FASTAPI_BASE_URL}}/api/orders/{{$('Loop Over Orders').item.json.id}}/mark-call-failed",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"reason\": ($json.message || 'Twilio API call failed from n8n') } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "all-orders-processed",
+      "name": "All Orders Processed",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [940, 420],
+      "parameters": {}
+    },
+    {
+      "id": "get-handoff-cases",
+      "name": "Get Handoff Cases (today)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [40, 560],
+      "notes": "Same 5-minute cadence as the call trigger loop, so a critical pharmacist_support case gets an owner alert quickly instead of waiting for the once-daily summary.",
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.FASTAPI_BASE_URL}}/api/analysis/handoff-cases",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "today_only",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "has-handoff-cases",
+      "name": "Has Handoff Cases?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [260, 560],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has-analysis-id",
+              "leftValue": "={{$json.id}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "no-handoff-cases",
+      "name": "No Handoff Cases",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [480, 660],
+      "parameters": {}
+    },
+    {
+      "id": "send-handoff-alert-email",
+      "name": "Send Handoff Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [480, 500],
+      "notes": "Configure an SMTP credential after import (Settings > Credentials > SMTP), matching SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD in your .env. One email is sent per handoff case (the node runs once per input item).",
+      "parameters": {
+        "fromEmail": "={{$env.OWNER_EMAIL}}",
+        "toEmail": "={{$env.OWNER_EMAIL}}",
+        "subject": "=MediCall AI Alert - Human Handoff Required",
+        "emailFormat": "text",
+        "text": "=Order reference: {{$json.order_reference}}\nCustomer name: {{$json.customer_name}}\nCustomer phone: {{$json.phone_number}}\nIssue type: {{$json.issue_type}}\nPriority: {{$json.priority}}\nPharmacist required: {{$json.pharmacist_required}}\n\nAI summary:\n{{$json.ai_summary}}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (every 5 min)": {
+      "main": [
+        [
+          { "node": "Get Pending Delivered Orders", "type": "main", "index": 0 },
+          { "node": "Get Handoff Cases (today)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Manual Trigger (test)": {
+      "main": [
+        [
+          { "node": "Get Pending Delivered Orders", "type": "main", "index": 0 },
+          { "node": "Get Handoff Cases (today)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Get Pending Delivered Orders": {
+      "main": [
+        [{ "node": "Normalize Orders", "type": "main", "index": 0 }]
+      ]
+    },
+    "Normalize Orders": {
+      "main": [
+        [{ "node": "Has Pending Orders?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Pending Orders?": {
+      "main": [
+        [{ "node": "Loop Over Orders", "type": "main", "index": 0 }],
+        [{ "node": "No Pending Orders", "type": "main", "index": 0 }]
+      ]
+    },
+    "Loop Over Orders": {
+      "main": [
+        [{ "node": "All Orders Processed", "type": "main", "index": 0 }],
+        [{ "node": "Trigger Twilio Outbound Call", "type": "main", "index": 0 }]
+      ]
+    },
+    "Trigger Twilio Outbound Call": {
+      "main": [
+        [{ "node": "Twilio Call Succeeded?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Twilio Call Succeeded?": {
+      "main": [
+        [{ "node": "Mark Call Triggered", "type": "main", "index": 0 }],
+        [{ "node": "Mark Call Failed", "type": "main", "index": 0 }]
+      ]
+    },
+    "Mark Call Triggered": {
+      "main": [
+        [{ "node": "Loop Over Orders", "type": "main", "index": 0 }]
+      ]
+    },
+    "Mark Call Failed": {
+      "main": [
+        [{ "node": "Loop Over Orders", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Handoff Cases (today)": {
+      "main": [
+        [{ "node": "Has Handoff Cases?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Handoff Cases?": {
+      "main": [
+        [{ "node": "Send Handoff Alert Email", "type": "main", "index": 0 }],
+        [{ "node": "No Handoff Cases", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

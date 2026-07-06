@@ -1,0 +1,124 @@
+{
+  "name": "MediCall AI - Daily Owner Summary",
+  "nodes": [
+    {
+      "id": "schedule-trigger-6pm",
+      "name": "Schedule Trigger (daily 6 PM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-200, 200],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual-trigger",
+      "name": "Manual Trigger (test)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-200, 380],
+      "parameters": {}
+    },
+    {
+      "id": "get-daily-summary",
+      "name": "Get Daily Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [40, 280],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.FASTAPI_BASE_URL}}/api/reports/daily-summary",
+        "options": {}
+      }
+    },
+    {
+      "id": "has-summary",
+      "name": "Has Summary?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [260, 280],
+      "notes": "Gate on total_calls > 0 so an empty day doesn't send a blank/zero email.",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "total-calls-gt-0",
+              "leftValue": "={{$json.total_calls}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "no-summary",
+      "name": "No Calls Today",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [480, 400],
+      "parameters": {}
+    },
+    {
+      "id": "send-owner-summary-email",
+      "name": "Send Owner Summary Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [480, 200],
+      "notes": "Configure an SMTP credential after import (Settings > Credentials > SMTP), matching SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD in your .env. Optional next step (see n8n-setup-guide.md): add a Slack or WhatsApp node in parallel with this one for a second notification channel.",
+      "parameters": {
+        "fromEmail": "={{$env.OWNER_EMAIL}}",
+        "toEmail": "={{$env.OWNER_EMAIL}}",
+        "subject": "=MediCall AI Daily Summary - {{$json.report_date}}",
+        "emailFormat": "text",
+        "text": "=Daily Medicine Delivery Support Summary\n\nTotal calls: {{$json.total_calls}}\nSuccessful deliveries: {{$json.successful_deliveries}}\nMissing item cases: {{$json.missing_item_count}}\nWrong medicine cases: {{$json.wrong_medicine_count}}\nDamaged package cases: {{$json.damaged_package_count}}\nPharmacist handoff cases: {{$json.pharmacist_handoff_count}}\nHandoff required cases: {{$json.handoff_required_count}}\n\nSummary:\n{{$json.summary}}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (daily 6 PM)": {
+      "main": [
+        [{ "node": "Get Daily Summary", "type": "main", "index": 0 }]
+      ]
+    },
+    "Manual Trigger (test)": {
+      "main": [
+        [{ "node": "Get Daily Summary", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Daily Summary": {
+      "main": [
+        [{ "node": "Has Summary?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Summary?": {
+      "main": [
+        [{ "node": "Send Owner Summary Email", "type": "main", "index": 0 }],
+        [{ "node": "No Calls Today", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

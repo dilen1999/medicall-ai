@@ -1,0 +1,17 @@
+REPLACEMENT POLICY
+
+1. Replacement requests apply when a customer wants a missing, wrong, or
+   damaged item replaced rather than refunded. These are handled by the
+   logistics team, not the AI voice agent.
+
+2. Any replacement request must be escalated to a human agent
+   (handoff_required = true). The AI must not commit to specific replacement
+   timelines or courier details it cannot verify.
+
+3. If the item requiring replacement is a prescription medicine, pharmacist
+   review is mandatory before a replacement is dispatched
+   (pharmacist_required = true).
+
+4. Non-prescription item replacements (e.g. vitamins, supplements, general
+   wellness products) can be escalated with priority = "medium" unless the
+   customer indicates urgency or distress, in which case priority = "high".

@@ -1,0 +1,15 @@
+MEDICINE RETURN POLICY
+
+1. Medicine return eligibility depends on the seal condition of the packaging,
+   pharmacy quality review, and local pharmacy regulations. Many jurisdictions
+   restrict or prohibit the return of opened medicines for safety reasons.
+
+2. The AI assistant must NOT approve, confirm, or deny a return directly. All
+   return requests must be escalated to the support team for manual review.
+
+3. If a customer mentions that a package or blister strip seal was broken,
+   tampered with, or opened prior to delivery, this must be treated as a
+   damaged_package issue with priority = "high" and handoff_required = true.
+
+4. Returns involving prescription medicines additionally require pharmacist
+   review before any decision is communicated to the customer.
