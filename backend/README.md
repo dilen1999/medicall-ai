@@ -497,3 +497,51 @@ architecture means none of that touches the route or model layers.
 - Designed a **production-style layered architecture** (routes → services →
   ORM models) with Docker/Docker Compose support and a Supabase-ready
   PostgreSQL configuration.
+
+## 16. Customer PWA (Storefront) API
+
+The `customer-pwa/` frontend in this monorepo now talks to this same backend
+for its real API mode (`VITE_ENABLE_MOCKS=false`). It is a separate concern
+from the voice-call-confirmation flow above, added without touching any of
+sections 1-15:
+
+- **Auth**: `POST /api/auth/register`, `POST /api/auth/login` (bcrypt-hashed
+  passwords, JWT bearer tokens, 7-day expiry), `POST /api/auth/forgot-password`,
+  `POST /api/auth/logout`. See `app/utils/security.py` and `app/dependencies.py`
+  (`get_current_customer`).
+- **Profile**: `GET/PATCH /api/customers/me`.
+- **Catalogue** (public): `GET /api/products`, `GET /api/products/{id}`,
+  `GET /api/categories` - backed by real `products`/`categories`/`pharmacies`
+  tables, seeded once on startup from `app/services/seed_service.py` (21
+  products across 6 categories, 3 pharmacies) when the `products` table is
+  empty.
+- **Addresses**: full CRUD under `/api/addresses`.
+- **Prescriptions**: `GET/POST /api/prescriptions` - uploaded files are
+  validated (JPEG/PNG/PDF, 5 MB max) and stored under `uploads/prescriptions/
+  <customer_id>/`, never inlined into the database.
+- **Cart**: `POST /api/cart/validate`, `POST /api/cart/apply-promotion` -
+  price, stock and prescription-approval are always re-derived server-side
+  from the `products`/`prescriptions` tables, never trusted from the client.
+- **Storefront orders**: `/api/storefront/orders` (list/get/create/cancel/
+  reorder/tracking). Deliberately a different path than the legacy
+  `/api/orders` n8n endpoints - see the docstring in
+  `app/api/storefront_order_routes.py`. Under the hood a storefront order is
+  still a `MedicineOrder` row (new nullable columns), so once one reaches
+  `delivered` it flows into the existing n8n/Twilio confirmation-call
+  pipeline unmodified (`app/utils/order_timeline.py` keeps `storefront_status`
+  and the legacy `delivery_status` in sync).
+- **Support**: `/api/support/cases`, `/api/support/pharmacist-callback`,
+  `/api/support/ai-chat` - the chat endpoint is a deterministic keyword
+  rule-engine (not an LLM call) that hard-escalates any medical-sounding
+  question to a pharmacist callback instead of answering it.
+- **Notifications**: `/api/notifications` (customer-facing in-app feed -
+  distinct from the owner-facing pharmacist-handoff email at
+  `POST /api/notifications/handoff`).
+
+All request/response bodies are camelCase (see `app/schemas/base.py`'s
+`CamelModel`) to match the frontend's TypeScript types with zero manual
+mapping. New tables are created automatically via `Base.metadata.create_all()`;
+new columns added to the pre-existing `customers`/`medicine_orders`/
+`order_items` tables are applied via small additive `ALTER TABLE ... ADD
+COLUMN IF NOT EXISTS` statements in `app/database.py` (`init_db()`), since
+this project uses `create_all()` instead of Alembic migrations.

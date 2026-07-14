@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     app_env: str = "development"
     api_v1_prefix: str = "/api"
 
+    # --- Customer PWA auth (JWT) ---
+    # Dev-only default secret - override with a real secret via JWT_SECRET_KEY
+    # before deploying anywhere reachable outside localhost.
+    jwt_secret_key: str = "dev-only-insecure-secret-change-me"
+    jwt_algorithm: str = "HS256"
+    jwt_expires_minutes: int = 60 * 24 * 7  # 7 days
+
+    # --- Prescription file storage ---
+    uploads_dir: str = "./uploads"
+
     # --- Database ---
     database_url: str = "postgresql://postgres:postgres@localhost:5432/medicall_ai"
 

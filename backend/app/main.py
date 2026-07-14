@@ -15,17 +15,27 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    address_routes,
     analysis_routes,
+    auth_routes,
     call_routes,
+    cart_routes,
+    customer_notification_routes,
     customer_routes,
     notification_routes,
     order_routes,
+    prescription_routes,
+    product_routes,
+    profile_routes,
     rag_routes,
     report_routes,
+    storefront_order_routes,
+    support_routes,
 )
 from app.config import get_settings
-from app.database import init_db
+from app.database import SessionLocal, init_db
 from app.services.rag_service import index_knowledge_base, is_index_empty
+from app.services.seed_service import seed_if_empty
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("medicall.main")
@@ -54,6 +64,20 @@ app.add_middleware(
 
 # --- Routers ---
 api_prefix = settings.api_v1_prefix
+
+# Customer PWA (storefront) routers. profile_routes MUST be registered
+# before customer_routes - see the docstring in app/api/profile_routes.py.
+app.include_router(auth_routes.router, prefix=api_prefix)
+app.include_router(profile_routes.router, prefix=api_prefix)
+app.include_router(product_routes.router, prefix=api_prefix)
+app.include_router(address_routes.router, prefix=api_prefix)
+app.include_router(prescription_routes.router, prefix=api_prefix)
+app.include_router(cart_routes.router, prefix=api_prefix)
+app.include_router(storefront_order_routes.router, prefix=api_prefix)
+app.include_router(support_routes.router, prefix=api_prefix)
+app.include_router(customer_notification_routes.router, prefix=api_prefix)
+
+# Original voice-call-confirmation (n8n/Twilio) routers.
 app.include_router(customer_routes.router, prefix=api_prefix)
 app.include_router(order_routes.router, prefix=api_prefix)
 app.include_router(call_routes.router, prefix=api_prefix)
@@ -69,6 +93,13 @@ def on_startup() -> None:
     """Create DB tables if they don't exist yet (MVP-friendly, no Alembic required)."""
     logger.info("Starting %s (env=%s)", settings.app_name, settings.app_env)
     init_db()
+
+    db = SessionLocal()
+    try:
+        seed_if_empty(db)
+    finally:
+        db.close()
+
     if is_index_empty():
         logger.info("RAG collection is empty - auto-indexing knowledge_base (handles ephemeral disks).")
         index_knowledge_base()

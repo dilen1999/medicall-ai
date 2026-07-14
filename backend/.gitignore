@@ -10,6 +10,10 @@ venv/
 
 # RAG vector store (rebuilt on startup / via /api/rag/index)
 chroma_store/
+chroma_store_dev/
+
+# Uploaded prescription files (customer PWA)
+uploads/
 
 # Editor
 .vscode/

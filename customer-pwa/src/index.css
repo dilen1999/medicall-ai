@@ -1,0 +1,44 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #f8fafc;
+  color: #0f172a;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dark body {
+  background-color: #0b1220;
+  color: #e2e8f0;
+}
+
+:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
